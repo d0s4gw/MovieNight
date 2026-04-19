@@ -1,0 +1,5 @@
+node_modules/
+movienight.db
+coverage/
+.DS_Store
+.env
