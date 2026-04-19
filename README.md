@@ -4,10 +4,11 @@ MovieNight is a full-stack, multi-user web application designed to help househol
 
 ## Architecture
 
-* **Frontend:** Built with React, Vite, and modern CSS featuring glassmorphism and dark-mode aesthetics.
-* **Backend:** Built with Node.js and Express. Handles API routing, input validation (express-validator), and security headers (Helmet).
-* **Database:** SQLite handles local persistence for User Profiles, Movie Preferences (Likes/Dislikes), and includes a fast API Caching layer to respect rate limits.
+* **Frontend:** Built with React, Vite, and modern CSS featuring glassmorphism, dark-mode aesthetics, and dynamic cinematic modals for movie trailers and details.
+* **Backend:** Built with Node.js and Express using a highly modular router-based architecture. Handles API routing, input validation (express-validator), and security headers (Helmet).
+* **Database:** SQLite handles local persistence for User Profiles, Movie Preferences (Likes/Dislikes), Watchlists, and includes a fast API Caching layer to respect rate limits.
 * **External API:** Integrates tightly with [The Movie Database (TMDB)](https://developer.themoviedb.org/docs) for real-time movie discovery and high-resolution posters.
+* **Smart Algorithms:** Features a "Date Night" engine that mathematically cross-references two separate users' profiles to find highly-rated mutual recommendations.
 
 ## Getting Started
 

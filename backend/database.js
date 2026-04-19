@@ -36,6 +36,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 value TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )`);
+
+            // Table for Watchlist
+            db.run(`CREATE TABLE IF NOT EXISTS Watchlist (
+                userId INTEGER,
+                movieId INTEGER,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (userId, movieId),
+                FOREIGN KEY (userId) REFERENCES Users(id) ON DELETE CASCADE
+            )`);
         });
     }
 });

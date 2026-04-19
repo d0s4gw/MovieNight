@@ -85,7 +85,7 @@ async function discoverMovies(filters) {
         sort_by: 'popularity.desc',
         include_adult: false,
         include_video: false,
-        page: 1,
+        page: filters.page || 1,
         watch_region: 'US'
     };
 
@@ -101,7 +101,7 @@ async function discoverMovies(filters) {
     
     if (filters.searchQuery) {
         // If there's a search query, we must use the /search/movie endpoint instead
-        const searchParams = { query: filters.searchQuery, language: 'en-US', page: 1, include_adult: false };
+        const searchParams = { query: filters.searchQuery, language: 'en-US', page: filters.page || 1, include_adult: false };
         const searchData = await fetchFromTMDB('/search/movie', searchParams);
         // TMDB search endpoint doesn't support complex filtering (like with_watch_providers), 
         // so we might just return the raw search results for simplicity when searching by name
@@ -135,9 +135,22 @@ async function getRecommendationsForLikedMovies(likedMovieIds) {
     return uniqueRecs.slice(0, 20); // Return top 20
 }
 
+async function getMovieDetails(movieId) {
+    // Append videos, credits, and watch/providers in one request
+    return await fetchFromTMDB(`/movie/${movieId}`, { append_to_response: 'videos,credits,watch/providers' });
+}
+
+async function getMultipleMovies(movieIds) {
+    const fetchPromises = movieIds.map(id => fetchFromTMDB(`/movie/${id}`));
+    const results = await Promise.all(fetchPromises);
+    return results;
+}
+
 module.exports = {
     getGenres,
     getProviders,
     discoverMovies,
-    getRecommendationsForLikedMovies
+    getRecommendationsForLikedMovies,
+    getMovieDetails,
+    getMultipleMovies
 };

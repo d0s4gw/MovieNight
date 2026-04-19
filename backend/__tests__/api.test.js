@@ -91,4 +91,57 @@ describe('MovieNight API', () => {
             expect(res.status).toBe(400);
         });
     });
+
+    describe('GET /api/movies/:id', () => {
+        it('should return movie details', async () => {
+            tmdbService.getMovieDetails = jest.fn().mockResolvedValue({ id: 1, title: 'Inception' });
+            const res = await request(app).get('/api/movies/1');
+            expect(res.status).toBe(200);
+            expect(res.body.title).toBe('Inception');
+            expect(tmdbService.getMovieDetails).toHaveBeenCalledWith('1');
+        });
+    });
+
+    describe('Watchlist Endpoints', () => {
+        it('should require userId for GET', async () => {
+            const res = await request(app).get('/api/watchlist');
+            expect(res.status).toBe(400);
+        });
+
+        it('should add to watchlist', async () => {
+            db.run.mockImplementation((sql, params, cb) => cb(null));
+            const res = await request(app).post('/api/watchlist').send({ userId: 1, movieId: 123 });
+            expect(res.status).toBe(200);
+        });
+
+        it('should delete from watchlist', async () => {
+            db.run.mockImplementation((sql, params, cb) => cb(null));
+            const res = await request(app).delete('/api/watchlist/1/123');
+            expect(res.status).toBe(200);
+        });
+    });
+
+    describe('Date Night Endpoint', () => {
+        it('should require user1 and user2', async () => {
+            const res = await request(app).get('/api/date-night?user1=1');
+            expect(res.status).toBe(400);
+        });
+
+        it('should return matched recommendations', async () => {
+            db.all.mockImplementation((sql, params, cb) => {
+                cb(null, [
+                    { userId: 1, movieId: 10, preference: 'like' },
+                    { userId: 2, movieId: 20, preference: 'like' }
+                ]);
+            });
+
+            tmdbService.getRecommendationsForLikedMovies = jest.fn()
+                .mockResolvedValueOnce([{ id: 100, popularity: 5 }]) // user 1 recs
+                .mockResolvedValueOnce([{ id: 100, popularity: 5 }]); // user 2 recs
+
+            const res = await request(app).get('/api/date-night?user1=1&user2=2');
+            expect(res.status).toBe(200);
+            expect(res.body[0].id).toBe(100);
+        });
+    });
 });

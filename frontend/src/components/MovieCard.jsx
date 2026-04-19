@@ -1,8 +1,9 @@
 import React from 'react';
-import { ThumbsUp, ThumbsDown, Star } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Bookmark } from 'lucide-react';
 
-export default function MovieCard({ movie, preferences, onPreferenceChange }) {
+export default function MovieCard({ movie, preferences, watchlist = [], onPreferenceChange, onWatchlistChange, onSelectMovie }) {
   const currentPref = preferences.find(p => p.movieId === movie.id)?.preference;
+  const inWatchlist = watchlist.find(w => w.movieId === movie.id);
 
   // Simple gradient generator based on movie id to make placeholders look distinct and premium
   const hue = (movie.id * 137.5) % 360;
@@ -12,20 +13,22 @@ export default function MovieCard({ movie, preferences, onPreferenceChange }) {
 
   return (
     <div className="movie-card glass">
-      {movie.poster_path ? (
-        <img 
-          src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} 
-          alt={movie.title} 
-          className="movie-poster" 
-          style={{ width: '100%', aspectRatio: '2/3', objectFit: 'cover' }}
-        />
-      ) : (
-        <div className="movie-poster-placeholder" style={gradientStyle}>
-          {movie.title.charAt(0)}
-        </div>
-      )}
+      <div style={{ cursor: 'pointer', position: 'relative' }} onClick={() => onSelectMovie && onSelectMovie(movie.id)}>
+        {movie.poster_path ? (
+          <img 
+            src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} 
+            alt={movie.title} 
+            className="movie-poster" 
+            style={{ width: '100%', aspectRatio: '2/3', objectFit: 'cover' }}
+          />
+        ) : (
+          <div className="movie-poster-placeholder" style={gradientStyle}>
+            {movie.title.charAt(0)}
+          </div>
+        )}
+      </div>
       <div className="movie-info">
-        <h3 className="movie-title">{movie.title}</h3>
+        <h3 className="movie-title" style={{ cursor: 'pointer' }} onClick={() => onSelectMovie && onSelectMovie(movie.id)}>{movie.title}</h3>
         <div className="movie-meta">
           <span className="badge">{movie.original_language?.toUpperCase() || 'EN'}</span>
           <span className="rating">
@@ -50,6 +53,14 @@ export default function MovieCard({ movie, preferences, onPreferenceChange }) {
             title="Dislike"
           >
             <ThumbsDown size={18} />
+          </button>
+          <button 
+            className={`action-btn ${inWatchlist ? 'active-watchlist' : ''}`}
+            onClick={() => onWatchlistChange(movie.id, !inWatchlist)}
+            title={inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+            style={{ marginLeft: 'auto', color: inWatchlist ? 'var(--accent)' : '' }}
+          >
+            <Bookmark size={18} fill={inWatchlist ? 'currentColor' : 'none'} />
           </button>
         </div>
       </div>
