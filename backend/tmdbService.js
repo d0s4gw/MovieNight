@@ -16,31 +16,49 @@ const tmdbApi = axios.create({
 // Cache duration: 24 hours for most things
 const CACHE_TTL = 24 * 60 * 60 * 1000; 
 
-function getCachedData(key) {
-    return new Promise((resolve, reject) => {
-        db.get("SELECT value, timestamp FROM Cache WHERE key = ?", [key], (err, row) => {
-            if (err) return reject(err);
-            if (!row) return resolve(null);
-            
-            const age = Date.now() - new Date(row.timestamp).getTime();
-            if (age > CACHE_TTL) {
-                // Expired
-                db.run("DELETE FROM Cache WHERE key = ?", [key]);
-                return resolve(null);
-            }
-            resolve(JSON.parse(row.value));
-        });
-    });
+async function getCachedData(key) {
+    if (!db) return null; // Fallback if db is not initialized (e.g., in tests without emulator)
+    
+    // Firestore keys cannot contain certain characters like '?' or '/'. We will hash it or base64 encode it.
+    // However, since it's just a cache key, base64 is easy and safe.
+    const safeKey = Buffer.from(key).toString('base64').replace(/[/+=]/g, '_');
+    
+    try {
+        const docRef = db.collection('Cache').doc(safeKey);
+        const doc = await docRef.get();
+        
+        if (!doc.exists) return null;
+        
+        const data = doc.data();
+        const age = Date.now() - new Date(data.timestamp).getTime();
+        
+        if (age > CACHE_TTL) {
+            // Expired
+            await docRef.delete();
+            return null;
+        }
+        
+        return JSON.parse(data.value);
+    } catch (error) {
+        console.error('Error reading from cache:', error.message);
+        return null;
+    }
 }
 
-function setCachedData(key, value) {
-    return new Promise((resolve, reject) => {
-        const sql = `INSERT OR REPLACE INTO Cache (key, value, timestamp) VALUES (?, ?, CURRENT_TIMESTAMP)`;
-        db.run(sql, [key, JSON.stringify(value)], (err) => {
-            if (err) return reject(err);
-            resolve();
+async function setCachedData(key, value) {
+    if (!db) return;
+    
+    const safeKey = Buffer.from(key).toString('base64').replace(/[/+=]/g, '_');
+    
+    try {
+        await db.collection('Cache').doc(safeKey).set({
+            key: key, // Store original key for reference
+            value: JSON.stringify(value),
+            timestamp: new Date().toISOString()
         });
-    });
+    } catch (error) {
+        console.error('Error writing to cache:', error.message);
+    }
 }
 
 async function fetchFromTMDB(endpoint, params = {}) {
@@ -103,8 +121,6 @@ async function discoverMovies(filters) {
         // If there's a search query, we must use the /search/movie endpoint instead
         const searchParams = { query: filters.searchQuery, language: 'en-US', page: filters.page || 1, include_adult: false };
         const searchData = await fetchFromTMDB('/search/movie', searchParams);
-        // TMDB search endpoint doesn't support complex filtering (like with_watch_providers), 
-        // so we might just return the raw search results for simplicity when searching by name
         return searchData.results;
     }
 
@@ -115,8 +131,6 @@ async function discoverMovies(filters) {
 async function getRecommendationsForLikedMovies(likedMovieIds) {
     if (!likedMovieIds || likedMovieIds.length === 0) return [];
 
-    // TMDB allows getting recommendations per movie. 
-    // We will fetch recommendations for the last 3 liked movies concurrently.
     const recentLikes = likedMovieIds.slice(-3); 
     
     const fetchPromises = recentLikes.map(movieId => 
@@ -127,16 +141,13 @@ async function getRecommendationsForLikedMovies(likedMovieIds) {
     
     const allRecs = results.flatMap(data => data.results);
     
-    // Remove duplicates based on ID
     const uniqueRecs = Array.from(new Map(allRecs.map(item => [item.id, item])).values());
     
-    // Sort by popularity
     uniqueRecs.sort((a, b) => b.popularity - a.popularity);
-    return uniqueRecs.slice(0, 20); // Return top 20
+    return uniqueRecs.slice(0, 20);
 }
 
 async function getMovieDetails(movieId) {
-    // Append videos, credits, and watch/providers in one request
     return await fetchFromTMDB(`/movie/${movieId}`, { append_to_response: 'videos,credits,watch/providers' });
 }
 

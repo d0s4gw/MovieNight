@@ -1,52 +1,22 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const admin = require('firebase-admin');
+require('dotenv').config();
 
-const dbPath = path.join(__dirname, 'movienight.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database', err);
-    } else {
-        console.log('Connected to the SQLite database.');
-        
-        db.serialize(() => {
-            // Table for Users
-            db.run(`CREATE TABLE IF NOT EXISTS Users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                type TEXT CHECK(type IN ('adult', 'child')) NOT NULL,
-                age INTEGER
-            )`);
+const isTest = process.env.NODE_ENV === 'test';
 
-            // Drop old table to migrate schema
-            db.run(`DROP TABLE IF EXISTS UserPreferences`);
-
-            // Table for storing liked/disliked movies per user
-            db.run(`CREATE TABLE IF NOT EXISTS UserPreferences (
-                userId INTEGER,
-                movieId INTEGER,
-                preference TEXT CHECK(preference IN ('like', 'dislike')),
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (userId, movieId),
-                FOREIGN KEY (userId) REFERENCES Users(id) ON DELETE CASCADE
-            )`);
-            
-            // Table for API caching
-            db.run(`CREATE TABLE IF NOT EXISTS Cache (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`);
-
-            // Table for Watchlist
-            db.run(`CREATE TABLE IF NOT EXISTS Watchlist (
-                userId INTEGER,
-                movieId INTEGER,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (userId, movieId),
-                FOREIGN KEY (userId) REFERENCES Users(id) ON DELETE CASCADE
-            )`);
+if (!isTest) {
+    try {
+        admin.initializeApp({
+            credential: admin.credential.applicationDefault()
         });
+        console.log('Connected to Firestore database.');
+    } catch (error) {
+        console.error('Error connecting to Firestore database:', error.message);
+        console.error('Make sure GOOGLE_APPLICATION_CREDENTIALS is set.');
     }
-});
+} else {
+    console.log('Test mode: skipping actual Firestore connection.');
+}
+
+const db = admin.apps.length ? admin.firestore() : null;
 
 module.exports = db;

@@ -13,8 +13,7 @@ jest.mock('axios', () => {
 const mockGet = require('axios').__mockGet;
 
 jest.mock('../database', () => ({
-    get: jest.fn(),
-    run: jest.fn()
+    collection: jest.fn()
 }));
 
 describe('tmdbService', () => {
@@ -25,7 +24,14 @@ describe('tmdbService', () => {
     describe('discoverMovies', () => {
         it('should return cache on cache hit', async () => {
             const mockCachedData = { results: [{ id: 1, title: 'Cached Movie' }] };
-            db.get.mockImplementation((sql, params, cb) => cb(null, { value: JSON.stringify(mockCachedData), timestamp: new Date().toISOString() }));
+            db.collection.mockReturnValue({
+                doc: jest.fn().mockReturnValue({
+                    get: jest.fn().mockResolvedValue({
+                        exists: true,
+                        data: () => ({ value: JSON.stringify(mockCachedData), timestamp: new Date().toISOString() })
+                    })
+                })
+            });
 
             const result = await tmdbService.discoverMovies({ minScore: 8 });
             expect(result[0].title).toBe('Cached Movie');
@@ -33,22 +39,31 @@ describe('tmdbService', () => {
         });
 
         it('should fetch from API on cache miss and save to cache', async () => {
-            db.get.mockImplementation((sql, params, cb) => cb(null, null)); // cache miss
-            db.run.mockImplementation((sql, params, cb) => cb(null)); // set cache success
+            const mSet = jest.fn().mockResolvedValue();
+            db.collection.mockReturnValue({
+                doc: jest.fn().mockReturnValue({
+                    get: jest.fn().mockResolvedValue({ exists: false }),
+                    set: mSet
+                })
+            });
             
             mockGet.mockResolvedValue({ data: { results: [{ id: 2, title: 'API Movie' }] } });
 
             const result = await tmdbService.discoverMovies({ providers: '8|9' });
             expect(result[0].title).toBe('API Movie');
             expect(mockGet).toHaveBeenCalledWith('/discover/movie', expect.any(Object));
-            expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT OR REPLACE INTO Cache'), expect.any(Array), expect.any(Function));
+            expect(mSet).toHaveBeenCalled();
         });
     });
 
     describe('getRecommendationsForLikedMovies', () => {
         it('should fetch recommendations concurrently', async () => {
-            db.get.mockImplementation((sql, params, cb) => cb(null, null)); // cache miss for these tests
-            db.run.mockImplementation((sql, params, cb) => cb(null));
+            db.collection.mockReturnValue({
+                doc: jest.fn().mockReturnValue({
+                    get: jest.fn().mockResolvedValue({ exists: false }),
+                    set: jest.fn().mockResolvedValue()
+                })
+            });
 
             // Setup mock to resolve successfully for any ID
             mockGet.mockResolvedValue({ data: { results: [{ id: 10, title: 'Rec 1' }] } });

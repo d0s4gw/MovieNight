@@ -3,31 +3,46 @@ const router = express.Router();
 const db = require('../database');
 const { body, validationResult } = require('express-validator');
 
-router.get('/', (req, res, next) => {
+router.get('/', async (req, res, next) => {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: "userId required" });
-    db.all("SELECT movieId, preference FROM UserPreferences WHERE userId = ?", [userId], (err, rows) => {
-        if (err) return next(err);
-        res.json(rows);
-    });
+    
+    try {
+        const snapshot = await db.collection('UserPreferences').where('userId', '==', userId).get();
+        const preferences = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            preferences.push({ movieId: data.movieId, preference: data.preference });
+        });
+        res.json(preferences);
+    } catch (error) {
+        next(error);
+    }
 });
 
 router.post('/',
-    body('userId').isInt(),
+    body('userId').notEmpty(),
     body('movieId').isInt(),
     body('preference').isIn(['like', 'dislike']),
-    (req, res, next) => {
+    async (req, res, next) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
         const { userId, movieId, preference } = req.body;
-        db.run("INSERT OR REPLACE INTO UserPreferences (userId, movieId, preference) VALUES (?, ?, ?)", 
-            [userId, movieId, preference], 
-            function(err) {
-                if (err) return next(err);
-                res.json({ success: true });
-            }
-        );
+        
+        try {
+            // Using composite key for the document ID ensures uniqueness per user-movie combo
+            const docId = `${userId}_${movieId}`;
+            await db.collection('UserPreferences').doc(docId).set({
+                userId,
+                movieId: parseInt(movieId),
+                preference,
+                timestamp: new Date().toISOString()
+            });
+            res.json({ success: true });
+        } catch (error) {
+            next(error);
+        }
     }
 );
 

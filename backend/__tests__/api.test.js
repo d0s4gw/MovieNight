@@ -4,11 +4,11 @@ const db = require('../database');
 const tmdbService = require('../tmdbService');
 
 // Mock dependencies
-jest.mock('../database', () => ({
-    all: jest.fn(),
-    run: jest.fn(),
-    get: jest.fn()
-}));
+jest.mock('../database', () => {
+    return {
+        collection: jest.fn()
+    };
+});
 
 jest.mock('../tmdbService', () => ({
     getGenres: jest.fn(),
@@ -56,8 +56,8 @@ describe('MovieNight API', () => {
         });
 
         it('should insert user and return their id', async () => {
-            db.run.mockImplementation((sql, params, cb) => {
-                cb.call({ lastID: 42 }, null);
+            db.collection.mockReturnValue({
+                add: jest.fn().mockResolvedValue({ id: 'user_123' })
             });
 
             const res = await request(app)
@@ -65,28 +65,31 @@ describe('MovieNight API', () => {
                 .send({ name: 'Alice', type: 'adult', age: null });
             
             expect(res.status).toBe(200);
-            expect(res.body.id).toBe(42);
+            expect(res.body.id).toBe('user_123');
             expect(res.body.name).toBe('Alice');
         });
     });
 
     describe('POST /api/preferences', () => {
         it('should validate inputs and insert preference', async () => {
-            db.run.mockImplementation((sql, params, cb) => cb(null));
+            db.collection.mockReturnValue({
+                doc: jest.fn().mockReturnValue({
+                    set: jest.fn().mockResolvedValue()
+                })
+            });
 
             const res = await request(app)
                 .post('/api/preferences')
-                .send({ userId: 1, movieId: 123, preference: 'like' });
+                .send({ userId: 'user_1', movieId: 123, preference: 'like' });
             
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
-            expect(db.run).toHaveBeenCalledTimes(1);
         });
 
         it('should return 400 for invalid preference string', async () => {
             const res = await request(app)
                 .post('/api/preferences')
-                .send({ userId: 1, movieId: 123, preference: 'love' });
+                .send({ userId: 'user_1', movieId: 123, preference: 'love' });
             
             expect(res.status).toBe(400);
         });
@@ -109,37 +112,51 @@ describe('MovieNight API', () => {
         });
 
         it('should add to watchlist', async () => {
-            db.run.mockImplementation((sql, params, cb) => cb(null));
-            const res = await request(app).post('/api/watchlist').send({ userId: 1, movieId: 123 });
+            db.collection.mockReturnValue({
+                doc: jest.fn().mockReturnValue({
+                    set: jest.fn().mockResolvedValue()
+                })
+            });
+            const res = await request(app).post('/api/watchlist').send({ userId: 'user_1', movieId: 123 });
             expect(res.status).toBe(200);
         });
 
         it('should delete from watchlist', async () => {
-            db.run.mockImplementation((sql, params, cb) => cb(null));
-            const res = await request(app).delete('/api/watchlist/1/123');
+            db.collection.mockReturnValue({
+                doc: jest.fn().mockReturnValue({
+                    delete: jest.fn().mockResolvedValue()
+                })
+            });
+            const res = await request(app).delete('/api/watchlist/user_1/123');
             expect(res.status).toBe(200);
         });
     });
 
     describe('Date Night Endpoint', () => {
         it('should require user1 and user2', async () => {
-            const res = await request(app).get('/api/date-night?user1=1');
+            const res = await request(app).get('/api/date-night?user1=user_1');
             expect(res.status).toBe(400);
         });
 
         it('should return matched recommendations', async () => {
-            db.all.mockImplementation((sql, params, cb) => {
-                cb(null, [
-                    { userId: 1, movieId: 10, preference: 'like' },
-                    { userId: 2, movieId: 20, preference: 'like' }
-                ]);
+            const mockSnapshot = [
+                { data: () => ({ userId: 'user_1', movieId: 10, preference: 'like' }) },
+                { data: () => ({ userId: 'user_2', movieId: 20, preference: 'like' }) }
+            ];
+
+            db.collection.mockReturnValue({
+                where: jest.fn().mockReturnValue({
+                    get: jest.fn()
+                        .mockResolvedValueOnce([{ data: () => ({ userId: 'user_1', movieId: 10, preference: 'like' }) }]) // user1
+                        .mockResolvedValueOnce([{ data: () => ({ userId: 'user_2', movieId: 20, preference: 'like' }) }]) // user2
+                })
             });
 
             tmdbService.getRecommendationsForLikedMovies = jest.fn()
                 .mockResolvedValueOnce([{ id: 100, popularity: 5 }]) // user 1 recs
                 .mockResolvedValueOnce([{ id: 100, popularity: 5 }]); // user 2 recs
 
-            const res = await request(app).get('/api/date-night?user1=1&user2=2');
+            const res = await request(app).get('/api/date-night?user1=user_1&user2=user_2');
             expect(res.status).toBe(200);
             expect(res.body[0].id).toBe(100);
         });
