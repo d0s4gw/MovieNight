@@ -1,58 +1,46 @@
 # MovieNight 🍿
 
-MovieNight is a full-stack, multi-user web application designed to help households discover movies, manage personal preferences, and generate tailored recommendations based on streaming availability.
+MovieNight is a full-stack, cloud-native web application designed to help users discover movies, manage personal preferences, and generate tailored recommendations based on streaming availability.
 
 ## Architecture
 
-* **Frontend:** Built with React, Vite, and modern CSS featuring glassmorphism, dark-mode aesthetics, and dynamic cinematic modals for movie trailers and details.
-* **Backend:** Built with Node.js and Express using a highly modular router-based architecture. Handles API routing, input validation (express-validator), and security headers (Helmet).
-* **Database:** SQLite handles local persistence for User Profiles, Movie Preferences (Likes/Dislikes), Watchlists, and includes a fast API Caching layer to respect rate limits.
-* **External API:** Integrates tightly with [The Movie Database (TMDB)](https://developer.themoviedb.org/docs) for real-time movie discovery and high-resolution posters.
-* **Smart Algorithms:** Features a "Date Night" engine that mathematically cross-references two separate users' profiles to find highly-rated mutual recommendations.
+* **Frontend:** Built with React, Vite, and modern CSS featuring glassmorphism. Secured with **Firebase Authentication** for private user accounts.
+* **Backend:** Built with Node.js and Express. Integrated with **Google Cloud Firestore (via MongoDB API)** using **Mongoose** for scalable, serverless data storage.
+* **External API:** Integrates with [The Movie Database (TMDB)](https://developer.themoviedb.org/docs) for real-time movie discovery.
+* **Smart Algorithms:** Features a "Date Night" engine that cross-references two users' profiles to find mutual recommendations.
+* **Deployment**: Pre-configured for **Google Cloud Run** (Backend) and **Firebase Hosting** (Frontend).
 
 ## Getting Started
 
 ### Prerequisites
 * Node.js (v18+ recommended)
 * A TMDB API Key and Read Access Token
+* A Firebase Project with **Firestore MongoDB API** and Authentication enabled
 
 ### Configuration
-1. Navigate into the `backend` directory.
-2. Create a `.env` file from `.env.example` (or configure it manually) with your TMDB credentials:
-   ```env
-   TMDB_API_KEY=your_api_key_here
-   TMDB_ACCESS_TOKEN=your_access_token_here
-   ```
+1. **Backend**: Create `backend/.env` with your `MONGODB_URI`, TMDB credentials, and add your `service-account.json`.
+2. **Frontend**: Create `frontend/.env` with your Firebase Web Config.
 
-### Running the Application (Production Mode)
-The backend is configured to statically serve the built React frontend.
-
-1. **Build the frontend:**
+### Running the Application
+1. **Start the backend:**
    ```bash
-   cd frontend
-   npm install
-   npm run build
-   ```
-2. **Start the backend:**
-   ```bash
-   cd ../backend
+   cd backend
    npm install
    npm start
    ```
-3. Open your browser to `http://localhost:3001`!
-
-## Multi-User Household
-The application supports multiple profiles in the same household. 
-* Navigate to the **Household** tab to add your family members. 
-* Age-restricted profiles automatically set appropriate rating filters on the Discover page.
-* "For You" recommendations are strictly isolated to the *Active User* selected in the header dropdown.
+2. **Start the frontend:**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+3. Open `http://localhost:5173`!
 
 ## Testing
 Comprehensive testing is implemented across the stack:
-* **Backend Tests (Jest + Supertest):** `cd backend && npm run test:coverage`
-* **Frontend Tests (Vitest + React Testing Library):** `cd frontend && npm run test -- --coverage`
+* **Backend Tests (Jest + Supertest):** `cd backend && npm test`
+* **Frontend Tests (Vitest + React Testing Library):** `cd frontend && npm test`
 
-## Documentation
-For more detailed instructions on extending or running individual development servers, please refer to the specific READMEs:
-* [Backend README](./backend/README.md)
-* [Frontend README](./frontend/README.md)
+## Deployment
+- **Backend**: `gcloud run deploy movienight-backend --source .`
+- **Frontend**: `npm run build && firebase deploy`

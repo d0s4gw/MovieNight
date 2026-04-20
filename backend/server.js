@@ -1,32 +1,21 @@
 const app = require('./app');
 const db = require('./database');
-const PORT = process.env.PORT || 3001;
+const logger = require('./utils/logger');
+const port = process.env.PORT || 3001;
 
-// Start Server & Graceful Shutdown
-const server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+const server = app.listen(port, () => {
+  logger.info(`Server is running on port ${port}`);
 });
 
-const gracefulShutdown = () => {
-    console.log('Received kill signal, shutting down gracefully.');
-    server.close(() => {
-        console.log('Closed out remaining connections.');
-        db.close((err) => {
-            if (err) {
-                console.error('Error closing database connection:', err.message);
-                process.exit(1);
-            }
-            console.log('Database connection closed.');
-            process.exit(0);
-        });
-    });
-
-    // Force close after 10s
-    setTimeout(() => {
-        console.error('Could not close connections in time, forcefully shutting down');
-        process.exit(1);
-    }, 10000);
-};
-
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+// Graceful shutdown handler for Cloud Run (SIGTERM)
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received. Shutting down gracefully...');
+  server.close(async () => {
+    logger.info('HTTP server closed.');
+    if (db.mongoose) {
+      await db.mongoose.close();
+      logger.info('MongoDB connection closed.');
+    }
+    process.exit(0);
+  });
+});

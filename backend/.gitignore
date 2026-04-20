@@ -3,3 +3,4 @@ movienight.db
 coverage/
 .DS_Store
 .env
+service-account.json

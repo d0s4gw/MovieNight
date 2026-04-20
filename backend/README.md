@@ -1,28 +1,33 @@
 # MovieNight Backend Service
 
-The Node.js/Express backend handles interactions with the TMDB API, data caching, and persistent local storage using SQLite.
+The Node.js/Express backend handles interactions with the TMDB API and manages data using Google Cloud Firestore.
+
+## Tech Stack
+- **Database**: Google Cloud Firestore (via MongoDB API)
+- **ODM**: Mongoose
+- **Authentication**: Firebase Admin SDK (JWT Verification)
+- **Logging**: Structured JSON Logging (Pino)
+- **External API**: [The Movie Database (TMDB)](https://developer.themoviedb.org/docs)
+- **Security**: `helmet`, `cors`, and `express-validator`
 
 ## Core Features
-1. **TMDB Integration:** Uses `tmdbService.js` to communicate with the TMDB API. It concurrently fetches metadata (`Promise.all`) to power the recommendations engine efficiently.
-2. **SQLite Database:** Stores User Profiles, composite User Preferences (likes/dislikes), and a TTL Cache for TMDB requests to dramatically speed up user searches.
-3. **Security:** Secured with `helmet` for HTTP headers, and strict endpoint validation using `express-validator` to prevent malicious payloads from reaching the database.
+1. **TMDB Integration:** Uses `tmdbService.js` to communicate with the TMDB API. Includes a TTL Cache to speed up repeated requests.
+2. **Mongoose Models:** Stores user profiles, preferences, and watchlists in Firestore via Mongoose schemas, ensuring data consistency.
+3. **Cloud-Ready:** Includes health checks, graceful shutdown, and structured logging for Google Cloud Run.
+4. **Secure Auth:** All API endpoints are protected by Firebase Auth middleware, ensuring data isolation between users.
 
 ## Development Setup
-
 1. `npm install`
-2. Create a `.env` file with `TMDB_API_KEY` and `TMDB_ACCESS_TOKEN`.
-3. To start the API server:
-   ```bash
-   npm start
-   ```
+2. Create `.env` with `MONGODB_URI`, `TMDB_API_KEY`, and `TMDB_ACCESS_TOKEN`.
+3. Place your `service-account.json` in this directory.
+4. `npm start`
+5. Run `npm run test:db` to verify database connectivity.
 
-*Note: The server runs on port `3001` and is configured to proxy requests from the Vite frontend during development. In production, the Express server also serves the static files from `../frontend/dist`.*
-
-## Testing
-The Express application is cleanly separated into `app.js` (logic) and `server.js` (listener/shutdown) to support isolated testing via `supertest`.
-
-* Run the test suite: `npm test`
-* Generate a coverage report: `npm run test:coverage`
-
-## Extending the API
-To add new routes, implement them in `app.js`. For any route touching the database, ensure it uses parameterized queries (or `express-validator`) to maintain SQLite injection protection. For new TMDB endpoints, define the request in `tmdbService.js` to leverage the built-in caching engine.
+## API Endpoints
+All endpoints are prefixed with `/api` and require a `Bearer <token>`.
+- `/movies`: Search and discover movies
+- `/user/profile`: Manage the authenticated user's profile
+- `/preferences`: Manage likes/dislikes
+- `/watchlist`: Manage the personal watchlist
+- `/date-night`: Generate mutual recommendations for two users
+- `/recommendations`: Get AI-driven recommendations based on likes

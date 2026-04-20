@@ -1,22 +1,29 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
+const User = require('../models/User');
 const { body, validationResult } = require('express-validator');
 
-router.get('/', async (req, res, next) => {
+// Get the profile for the current authenticated user
+router.get('/profile', async (req, res, next) => {
     try {
-        const snapshot = await db.collection('Users').get();
-        const users = [];
-        snapshot.forEach(doc => {
-            users.push({ id: doc.id, ...doc.data() });
+        const user = await User.findOne({ userId: req.user.uid });
+        if (!user) {
+            // Default profile if none exists
+            return res.json({ name: req.user.name || 'User', type: 'adult', age: null });
+        }
+        res.json({
+            name: user.name,
+            type: user.type,
+            age: user.age,
+            updatedAt: user.updatedAt
         });
-        res.json(users);
     } catch (error) {
         next(error);
     }
 });
 
-router.post('/', 
+// Update the profile for the current authenticated user
+router.post('/profile', 
     body('name').isString().trim().notEmpty(),
     body('type').isIn(['adult', 'child']),
     body('age').optional({ nullable: true }).isInt({ min: 0 }),
@@ -27,30 +34,27 @@ router.post('/',
         const { name, type, age } = req.body;
         
         try {
-            const newUser = { name, type, age: age || null };
-            const docRef = await db.collection('Users').add(newUser);
-            res.json({ id: docRef.id, ...newUser });
+            const updatedUser = await User.findOneAndUpdate(
+                { userId: req.user.uid },
+                { 
+                    userId: req.user.uid,
+                    name, 
+                    type, 
+                    age: age || null, 
+                    updatedAt: new Date() 
+                },
+                { upsert: true, new: true }
+            );
+            res.json({
+                name: updatedUser.name,
+                type: updatedUser.type,
+                age: updatedUser.age,
+                updatedAt: updatedUser.updatedAt
+            });
         } catch (error) {
             next(error);
         }
     }
 );
-
-router.delete('/:id', async (req, res, next) => {
-    try {
-        await db.collection('Users').doc(req.params.id).delete();
-        
-        // Also clean up preferences and watchlist for this user
-        const prefSnapshot = await db.collection('UserPreferences').where('userId', '==', req.params.id).get();
-        prefSnapshot.forEach(doc => doc.ref.delete());
-        
-        const watchSnapshot = await db.collection('Watchlist').where('userId', '==', req.params.id).get();
-        watchSnapshot.forEach(doc => doc.ref.delete());
-
-        res.json({ success: true });
-    } catch (error) {
-        next(error);
-    }
-});
 
 module.exports = router;

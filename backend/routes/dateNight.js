@@ -1,22 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
+const Preference = require('../models/Preference');
 const tmdbService = require('../tmdbService');
 
 router.get('/', async (req, res, next) => {
-    const user1 = req.query.user1;
+    const user1 = req.user.uid;
     const user2 = req.query.user2;
-    if (!user1 || !user2) return res.status(400).json({ error: "user1 and user2 required" });
+    if (!user2) return res.status(400).json({ error: "user2 required" });
 
     try {
         // Fetch preferences for both users
-        const pref1Snapshot = await db.collection('UserPreferences').where('userId', '==', user1).get();
-        const pref2Snapshot = await db.collection('UserPreferences').where('userId', '==', user2).get();
+        const allPreferences = await Preference.find({
+            userId: { $in: [user1, user2] }
+        });
         
-        const allPreferences = [];
-        pref1Snapshot.forEach(doc => allPreferences.push(doc.data()));
-        pref2Snapshot.forEach(doc => allPreferences.push(doc.data()));
-
         const dislikes = new Set(allPreferences.filter(p => p.preference === 'dislike').map(p => p.movieId));
         
         const likes1 = allPreferences.filter(p => p.preference === 'like' && p.userId === user1).map(p => p.movieId);
