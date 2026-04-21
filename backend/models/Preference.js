@@ -1,7 +1,12 @@
 const mongoose = require('mongoose');
 
 const preferenceSchema = new mongoose.Schema({
-  userId: {
+  ownerId: {
+    type: String,
+    required: true,
+    index: true
+  },
+  profileId: {
     type: String,
     required: true,
     index: true
@@ -21,7 +26,7 @@ const preferenceSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// Ensure uniqueness per user-movie combo
-preferenceSchema.index({ userId: 1, movieId: 1 }, { unique: true });
+// Ensure uniqueness per profile-movie combo
+preferenceSchema.index({ profileId: 1, movieId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Preference', preferenceSchema);

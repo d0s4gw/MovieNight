@@ -4,10 +4,11 @@ const Watchlist = require('../models/Watchlist');
 const { body, validationResult } = require('express-validator');
 
 router.get('/', async (req, res, next) => {
-    const userId = req.user.uid;
+    const ownerId = req.user.uid;
+    const profileId = req.headers['x-profile-id'] || ownerId;
     
     try {
-        const watchlist = await Watchlist.find({ userId }).sort({ timestamp: -1 });
+        const watchlist = await Watchlist.find({ ownerId, profileId }).sort({ timestamp: -1 });
         res.json(watchlist.map(item => ({
             movieId: item.movieId,
             timestamp: item.timestamp
@@ -23,13 +24,14 @@ router.post('/',
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-        const userId = req.user.uid;
+        const ownerId = req.user.uid;
+        const profileId = req.headers['x-profile-id'] || ownerId;
         const { movieId } = req.body;
         
         try {
             await Watchlist.findOneAndUpdate(
-                { userId, movieId: parseInt(movieId) },
-                { userId, movieId: parseInt(movieId), timestamp: new Date() },
+                { ownerId, profileId, movieId: parseInt(movieId) },
+                { ownerId, profileId, movieId: parseInt(movieId), timestamp: new Date() },
                 { upsert: true, new: true }
             );
             res.json({ success: true });
@@ -41,9 +43,10 @@ router.post('/',
 
 router.delete('/:movieId', async (req, res, next) => {
     try {
-        const userId = req.user.uid;
+        const ownerId = req.user.uid;
+        const profileId = req.headers['x-profile-id'] || ownerId;
         const { movieId } = req.params;
-        await Watchlist.findOneAndDelete({ userId, movieId: parseInt(movieId) });
+        await Watchlist.findOneAndDelete({ ownerId, profileId, movieId: parseInt(movieId) });
         res.json({ success: true });
     } catch (error) {
         next(error);

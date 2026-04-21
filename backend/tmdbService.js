@@ -1,9 +1,14 @@
 require('dotenv').config();
 const axios = require('axios');
-const db = require('./database');
+const Cache = require('./models/Cache');
+const logger = require('./utils/logger');
 
 const TMDB_ACCESS_TOKEN = process.env.TMDB_ACCESS_TOKEN;
 const BASE_URL = 'https://api.themoviedb.org/3';
+
+if (!TMDB_ACCESS_TOKEN) {
+    logger.error('CRITICAL: TMDB_ACCESS_TOKEN is not set. TMDB API calls will fail.');
+}
 
 const tmdbApi = axios.create({
     baseURL: BASE_URL,
@@ -13,51 +18,43 @@ const tmdbApi = axios.create({
     }
 });
 
-// Cache duration: 24 hours for most things
+// Cache duration: 24 hours
 const CACHE_TTL = 24 * 60 * 60 * 1000; 
 
 async function getCachedData(key) {
-    if (!db) return null; // Fallback if db is not initialized (e.g., in tests without emulator)
-    
-    // Firestore keys cannot contain certain characters like '?' or '/'. We will hash it or base64 encode it.
-    // However, since it's just a cache key, base64 is easy and safe.
-    const safeKey = Buffer.from(key).toString('base64').replace(/[/+=]/g, '_');
-    
     try {
-        const docRef = db.collection('Cache').doc(safeKey);
-        const doc = await docRef.get();
+        const cached = await Cache.findOne({ key });
         
-        if (!doc.exists) return null;
+        if (!cached) return null;
         
-        const data = doc.data();
-        const age = Date.now() - new Date(data.timestamp).getTime();
+        const age = Date.now() - new Date(cached.timestamp).getTime();
         
         if (age > CACHE_TTL) {
             // Expired
-            await docRef.delete();
+            await Cache.deleteOne({ key });
             return null;
         }
         
-        return JSON.parse(data.value);
+        return JSON.parse(cached.value);
     } catch (error) {
-        console.error('Error reading from cache:', error.message);
+        logger.error({ err: error, key }, 'Error reading from cache');
         return null;
     }
 }
 
 async function setCachedData(key, value) {
-    if (!db) return;
-    
-    const safeKey = Buffer.from(key).toString('base64').replace(/[/+=]/g, '_');
-    
     try {
-        await db.collection('Cache').doc(safeKey).set({
-            key: key, // Store original key for reference
-            value: JSON.stringify(value),
-            timestamp: new Date().toISOString()
-        });
+        await Cache.findOneAndUpdate(
+            { key },
+            { 
+                key,
+                value: JSON.stringify(value),
+                timestamp: new Date()
+            },
+            { upsert: true, new: true }
+        );
     } catch (error) {
-        console.error('Error writing to cache:', error.message);
+        logger.error({ err: error, key }, 'Error writing to cache');
     }
 }
 
@@ -73,13 +70,13 @@ async function fetchFromTMDB(endpoint, params = {}) {
         const cached = await getCachedData(cacheKey);
         if (cached) return cached;
 
-        console.log(`Cache miss for ${cacheKey}, fetching from TMDB...`);
+        logger.info({ cacheKey }, 'Cache miss, fetching from TMDB');
         const response = await tmdbApi.get(endpoint, { params });
         
         await setCachedData(cacheKey, response.data);
         return response.data;
     } catch (err) {
-        console.error(`Error fetching TMDB endpoint ${endpoint}:`, err.message);
+        logger.error({ err: err.message, endpoint }, 'Error fetching TMDB endpoint');
         throw err;
     }
 }
@@ -91,7 +88,6 @@ async function getGenres() {
 
 async function getProviders() {
     const data = await fetchFromTMDB('/watch/providers/movie', { watch_region: 'US' });
-    // Filter to some major US providers to keep the list clean (Netflix, Amazon, Disney+, HBO Max/Max, Hulu, Apple TV+)
     const targetProviderIds = [8, 9, 337, 384, 1899, 15, 2];
     const providers = data.results.filter(p => targetProviderIds.includes(p.provider_id));
     return providers;
@@ -111,14 +107,12 @@ async function discoverMovies(filters) {
     if (filters.genres) params.with_genres = filters.genres;
     if (filters.minScore) params['vote_average.gte'] = filters.minScore;
     
-    // Certifications (Ratings like PG-13) are slightly complex in TMDB, needs certification_country
     if (filters.ratings) {
         params.certification_country = 'US';
         params.certification = filters.ratings;
     }
     
     if (filters.searchQuery) {
-        // If there's a search query, we must use the /search/movie endpoint instead
         const searchParams = { query: filters.searchQuery, language: 'en-US', page: filters.page || 1, include_adult: false };
         const searchData = await fetchFromTMDB('/search/movie', searchParams);
         return searchData.results;

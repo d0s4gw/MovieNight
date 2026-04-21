@@ -4,10 +4,11 @@ const Preference = require('../models/Preference');
 const { body, validationResult } = require('express-validator');
 
 router.get('/', async (req, res, next) => {
-    const userId = req.user.uid;
+    const ownerId = req.user.uid;
+    const profileId = req.headers['x-profile-id'] || ownerId;
     
     try {
-        const preferences = await Preference.find({ userId });
+        const preferences = await Preference.find({ ownerId, profileId });
         res.json(preferences.map(item => ({
             movieId: item.movieId,
             preference: item.preference
@@ -24,13 +25,14 @@ router.post('/',
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-        const userId = req.user.uid;
+        const ownerId = req.user.uid;
+        const profileId = req.headers['x-profile-id'] || ownerId;
         const { movieId, preference } = req.body;
         
         try {
             await Preference.findOneAndUpdate(
-                { userId, movieId: parseInt(movieId) },
-                { userId, movieId: parseInt(movieId), preference, timestamp: new Date() },
+                { ownerId, profileId, movieId: parseInt(movieId) },
+                { ownerId, profileId, movieId: parseInt(movieId), preference, timestamp: new Date() },
                 { upsert: true, new: true }
             );
             res.json({ success: true });

@@ -49,4 +49,64 @@ describe('HouseholdConfig', () => {
       expect(fetchUsers).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('handles child profile type correctly', async () => {
+    fetch.mockResolvedValueOnce({ ok: true });
+    render(<HouseholdConfig users={[]} fetchUsers={() => {}} API_BASE="/api" setActiveUser={() => {}} />);
+    
+    fireEvent.click(screen.getByText('Add Member'));
+    
+    fireEvent.change(screen.getByPlaceholderText('e.g., Jackson'), { target: { value: 'Jackson' } });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'child' } });
+    
+    const ageInput = screen.getByPlaceholderText('e.g., 10');
+    fireEvent.change(ageInput, { target: { value: '10' } });
+    
+    fireEvent.click(screen.getByText('Save'));
+    
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/users', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ name: 'Jackson', type: 'child', age: 10 })
+      }));
+    });
+  });
+
+  it('allows editing an existing user', async () => {
+    const fetchUsers = vi.fn();
+    fetch.mockResolvedValueOnce({ ok: true });
+
+    render(<HouseholdConfig users={users} fetchUsers={fetchUsers} API_BASE="/api" setActiveUser={() => {}} />);
+    
+    fireEvent.click(screen.getByLabelText('Edit Mike'));
+    
+    expect(screen.getByDisplayValue('Mike')).toBeInTheDocument();
+    
+    fireEvent.change(screen.getByDisplayValue('Mike'), { target: { value: 'Michael' } });
+    fireEvent.click(screen.getByText('Save'));
+    
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/users/1', expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ name: 'Michael', type: 'adult', age: null })
+      }));
+    });
+  });
+
+  it('allows deleting a user', async () => {
+    window.confirm = vi.fn().mockReturnValue(true);
+    const fetchUsers = vi.fn();
+    fetch.mockResolvedValueOnce({ ok: true });
+
+    render(<HouseholdConfig users={users} fetchUsers={fetchUsers} API_BASE="/api" setActiveUser={() => {}} />);
+    
+    fireEvent.click(screen.getByLabelText('Delete Mike'));
+    
+    expect(window.confirm).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/users/1', expect.objectContaining({
+        method: 'DELETE'
+      }));
+    });
+  });
 });

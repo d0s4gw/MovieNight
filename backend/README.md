@@ -19,9 +19,15 @@ The Node.js/Express backend handles interactions with the TMDB API and manages d
 ## Development Setup
 1. `npm install`
 2. Create `.env` with `MONGODB_URI`, `TMDB_API_KEY`, and `TMDB_ACCESS_TOKEN`.
-3. Place your `service-account.json` in this directory.
+3. Place your `service-account.json` in this directory or set `GOOGLE_APPLICATION_CREDENTIALS` to its path.
 4. `npm start`
 5. Run `npm run test:db` to verify database connectivity.
+
+## Testing & Coverage
+We use **Jest** and **Supertest** for backend testing.
+- Run tests: `npm test`
+- Run with coverage: `npm run test:coverage`
+- View results in `coverage/lcov-report/index.html`
 
 ## API Endpoints
 All endpoints are prefixed with `/api` and require a `Bearer <token>`.

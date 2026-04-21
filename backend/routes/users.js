@@ -1,29 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
+const Profile = require('../models/Profile');
 const { body, validationResult } = require('express-validator');
 
-// Get the profile for the current authenticated user
-router.get('/profile', async (req, res, next) => {
+// Get all profiles for the authenticated owner
+router.get('/', async (req, res, next) => {
     try {
-        const user = await User.findOne({ userId: req.user.uid });
-        if (!user) {
-            // Default profile if none exists
-            return res.json({ name: req.user.name || 'User', type: 'adult', age: null });
-        }
-        res.json({
-            name: user.name,
-            type: user.type,
-            age: user.age,
-            updatedAt: user.updatedAt
-        });
+        const profiles = await Profile.find({ ownerId: req.user.uid });
+        res.json(profiles.map(p => ({
+            id: p._id,
+            name: p.name,
+            type: p.type,
+            age: p.age,
+            updatedAt: p.updatedAt
+        })));
     } catch (error) {
         next(error);
     }
 });
 
-// Update the profile for the current authenticated user
-router.post('/profile', 
+// Create a new household profile
+router.post('/', 
     body('name').isString().trim().notEmpty(),
     body('type').isIn(['adult', 'child']),
     body('age').optional({ nullable: true }).isInt({ min: 0 }),
@@ -34,27 +31,91 @@ router.post('/profile',
         const { name, type, age } = req.body;
         
         try {
-            const updatedUser = await User.findOneAndUpdate(
-                { userId: req.user.uid },
-                { 
-                    userId: req.user.uid,
-                    name, 
-                    type, 
-                    age: age || null, 
-                    updatedAt: new Date() 
-                },
-                { upsert: true, new: true }
-            );
+            const profile = new Profile({
+                ownerId: req.user.uid,
+                name,
+                type,
+                age: age || null
+            });
+            await profile.save();
             res.json({
-                name: updatedUser.name,
-                type: updatedUser.type,
-                age: updatedUser.age,
-                updatedAt: updatedUser.updatedAt
+                id: profile._id,
+                name: profile.name,
+                type: profile.type,
+                age: profile.age,
+                updatedAt: profile.updatedAt
             });
         } catch (error) {
             next(error);
         }
     }
 );
+
+// Update a household profile
+router.put('/:id',
+    body('name').isString().trim().notEmpty(),
+    body('type').isIn(['adult', 'child']),
+    body('age').optional({ nullable: true }).isInt({ min: 0 }),
+    async (req, res, next) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+        const { name, type, age } = req.body;
+        
+        try {
+            const profile = await Profile.findOneAndUpdate(
+                { _id: req.params.id, ownerId: req.user.uid },
+                { name, type, age: age || null },
+                { new: true }
+            );
+            if (!profile) return res.status(404).json({ error: 'Profile not found' });
+            res.json({
+                id: profile._id,
+                name: profile.name,
+                type: profile.type,
+                age: profile.age,
+                updatedAt: profile.updatedAt
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Delete a household profile
+router.delete('/:id', async (req, res, next) => {
+    try {
+        const profile = await Profile.findOneAndDelete({ _id: req.params.id, ownerId: req.user.uid });
+        if (!profile) return res.status(404).json({ error: 'Profile not found' });
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Backwards compatibility for the /profile endpoint (returns the owner's primary profile or first one)
+router.get('/profile', async (req, res, next) => {
+    try {
+        let profile = await Profile.findOne({ ownerId: req.user.uid });
+        if (!profile) {
+            // Create a default one if none exists
+            profile = new Profile({
+                ownerId: req.user.uid,
+                name: req.user.name || 'User',
+                type: 'adult'
+            });
+            await profile.save();
+        }
+        res.json({
+            id: profile._id,
+            name: profile.name,
+            type: profile.type,
+            age: profile.age,
+            updatedAt: profile.updatedAt
+        });
+    } catch (error) {
+        next(error);
+    }
+});
 
 module.exports = router;

@@ -23,7 +23,7 @@ export default function DateNightTab({
       </div>
 
       <div className="movie-grid">
-        {dateUser1 && dateUser2 && dateNightMatches.map(movie => (
+        {dateUser1 && dateUser2 && (dateNightMatches || []).map(movie => (
           <MovieCard 
             key={movie.id} 
             movie={movie} 

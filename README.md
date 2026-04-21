@@ -4,10 +4,39 @@ MovieNight is a full-stack, cloud-native web application designed to help users 
 
 ## Architecture
 
+```mermaid
+graph TD
+    User((User))
+    subgraph Frontend
+        React[React SPA]
+        FBAuth[Firebase Auth]
+    end
+    subgraph Backend
+        Express[Express.js]
+        Pino[Pino Logging]
+        TMDBService[TMDB Service]
+    end
+    subgraph Database
+        Firestore[Cloud Firestore]
+        Mongoose[Mongoose ODM]
+    end
+    subgraph External
+        TMDB[(TMDB API)]
+    end
+
+    User --> React
+    React --> FBAuth
+    React --> Express
+    Express --> Firestore
+    Express --> TMDBService
+    TMDBService --> TMDB
+```
+
 * **Frontend:** Built with React, Vite, and modern CSS featuring glassmorphism. Secured with **Firebase Authentication** for private user accounts.
 * **Backend:** Built with Node.js and Express. Integrated with **Google Cloud Firestore (via MongoDB API)** using **Mongoose** for scalable, serverless data storage.
 * **External API:** Integrates with [The Movie Database (TMDB)](https://developer.themoviedb.org/docs) for real-time movie discovery.
-* **Smart Algorithms:** Features a "Date Night" engine that cross-references two users' profiles to find mutual recommendations.
+* **Household Profiles:** Supports multiple profiles per household (Adult/Child), enabling isolated preferences and watchlists for every family member.
+* **Smart Algorithms:** Features a "Date Night" engine that cross-references any two household profiles to find mutual recommendations.
 * **Deployment**: Pre-configured for **Google Cloud Run** (Backend) and **Firebase Hosting** (Frontend).
 
 ## Getting Started

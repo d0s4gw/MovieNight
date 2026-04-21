@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Trash2, Edit2, Check, X } from 'lucide-react';
 
-export default function HouseholdConfig({ users, fetchUsers, API_BASE, setActiveUser, activeUser }) {
+export default function HouseholdConfig({ users, fetchUsers, API_BASE, setActiveUser, activeUser, token }) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   
@@ -26,13 +26,19 @@ export default function HouseholdConfig({ users, fetchUsers, API_BASE, setActive
       if (editingId) {
         await fetch(`${API_BASE}/users/${editingId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify(payload)
         });
       } else {
         await fetch(`${API_BASE}/users`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify(payload)
         });
       }
@@ -46,7 +52,10 @@ export default function HouseholdConfig({ users, fetchUsers, API_BASE, setActive
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this profile?')) return;
     try {
-      await fetch(`${API_BASE}/users/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/users/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (activeUser?.id === id) setActiveUser(null);
       fetchUsers();
     } catch (err) {
@@ -137,12 +146,14 @@ export default function HouseholdConfig({ users, fetchUsers, API_BASE, setActive
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button 
                 onClick={() => startEdit(user)}
+                aria-label={`Edit ${user.name}`}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.5rem' }}
               >
                 <Edit2 size={18} />
               </button>
               <button 
                 onClick={() => handleDelete(user.id)}
+                aria-label={`Delete ${user.name}`}
                 style={{ background: 'transparent', border: 'none', color: '#ff4d4f', cursor: 'pointer', padding: '0.5rem' }}
               >
                 <Trash2 size={18} />

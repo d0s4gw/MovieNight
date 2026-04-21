@@ -4,20 +4,23 @@ const Preference = require('../models/Preference');
 const tmdbService = require('../tmdbService');
 
 router.get('/', async (req, res, next) => {
-    const user1 = req.user.uid;
-    const user2 = req.query.user2;
-    if (!user2) return res.status(400).json({ error: "user2 required" });
+    const ownerId = req.user.uid;
+    const profile1 = req.query.user1 || req.headers['x-profile-id'];
+    const profile2 = req.query.user2;
+    
+    if (!profile1 || !profile2) return res.status(400).json({ error: "Two profile IDs required (user1/header and user2 param)" });
 
     try {
-        // Fetch preferences for both users
+        // Fetch preferences for both profiles (ensure they belong to the same owner)
         const allPreferences = await Preference.find({
-            userId: { $in: [user1, user2] }
+            ownerId, // Security check
+            profileId: { $in: [profile1, profile2] }
         });
         
         const dislikes = new Set(allPreferences.filter(p => p.preference === 'dislike').map(p => p.movieId));
         
-        const likes1 = allPreferences.filter(p => p.preference === 'like' && p.userId === user1).map(p => p.movieId);
-        const likes2 = allPreferences.filter(p => p.preference === 'like' && p.userId === user2).map(p => p.movieId);
+        const likes1 = allPreferences.filter(p => p.preference === 'like' && p.profileId === profile1).map(p => p.movieId);
+        const likes2 = allPreferences.filter(p => p.preference === 'like' && p.profileId === profile2).map(p => p.movieId);
         
         if (likes1.length === 0 || likes2.length === 0) {
             return res.json([]); 

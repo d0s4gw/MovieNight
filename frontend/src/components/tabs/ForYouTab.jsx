@@ -9,7 +9,7 @@ export default function ForYouTab({
   return (
     <main style={{ gridColumn: '1 / -1' }}>
       <div className="movie-grid">
-        {recommendations.map(movie => (
+        {(recommendations || []).map(movie => (
           <MovieCard 
             key={movie.id} 
             movie={movie} 

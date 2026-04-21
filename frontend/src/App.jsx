@@ -8,8 +8,9 @@ import DiscoverTab from './components/tabs/DiscoverTab';
 import ForYouTab from './components/tabs/ForYouTab';
 import WatchlistTab from './components/tabs/WatchlistTab';
 import DateNightTab from './components/tabs/DateNightTab';
+import HouseholdConfig from './components/HouseholdConfig';
 
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Users } from 'lucide-react';
 
 const API_BASE = '/api';
 
@@ -20,8 +21,9 @@ function App() {
 
   const [activeTab, setActiveTab] = useState('discover');
   
-  // Profile Management (Single User)
+  // Profile Management
   const [profile, setProfile] = useState(null);
+  const [activeProfileId, setActiveProfileId] = useState('');
 
   // --- Auth Effect ---
   useEffect(() => {
@@ -61,6 +63,10 @@ function App() {
   // --- Date Night Tab State ---
   const [dateNightMatches, setDateNightMatches] = useState([]);
   const [dateUser2, setDateUser2] = useState('');
+  const [dateUser1, setDateUser1] = useState('');
+
+  // Household Users State
+  const [users, setUsers] = useState([]);
 
   // Global Loading State
   const [loading, setLoading] = useState(false);
@@ -74,31 +80,52 @@ function App() {
   useEffect(() => {
     if (!token) return;
 
-    const headers = { 'Authorization': `Bearer ${token}` };
+    const initData = async () => {
+      try {
+        const headers = { 'Authorization': `Bearer ${token}` };
 
-    // Fetch basic metadata
-    fetch(`${API_BASE}/movies/genres`, { headers }).then(res => res.json()).then(setGenres);
-    fetch(`${API_BASE}/movies/providers`, { headers }).then(res => res.json()).then(setProviders);
-    fetch(`${API_BASE}/movies/certifications`, { headers }).then(res => res.json()).then(setCertifications);
-    
-    // Fetch user profile
-    fetch(`${API_BASE}/user/profile`, { headers })
-      .then(res => res.json())
-      .then(data => {
-        setProfile(data);
-        // Set initial ratings based on profile type
-        if (data.type === 'adult') setSelectedRatings(["G", "PG", "PG-13", "R", "NC-17"]);
-        else {
-          const age = data.age || 0;
-          if (age < 10) setSelectedRatings(["G"]);
-          else if (age >= 10 && age < 13) setSelectedRatings(["G", "PG"]);
-          else setSelectedRatings(["G", "PG", "PG-13"]);
+        // Fetch basic metadata
+        fetch(`${API_BASE}/movies/genres`, { headers }).then(res => res.json()).then(setGenres);
+        fetch(`${API_BASE}/movies/providers`, { headers }).then(res => res.json()).then(setProviders);
+        fetch(`${API_BASE}/movies/certifications`, { headers }).then(res => res.json()).then(setCertifications);
+        
+        // Fetch/Initialize primary user profile
+        const profileData = await authenticatedFetch(`${API_BASE}/users/profile`);
+        if (profileData) {
+          setProfile(profileData);
+          if (profileData.id) setActiveProfileId(profileData.id);
         }
-      });
 
+        // Fetch all household profiles
+        await fetchUsers();
+      } catch (err) {
+        console.error("Initialization error:", err);
+      }
+    };
+
+    initData();
+  }, [token]);
+
+  // Fetch data specific to the active profile
+  useEffect(() => {
+    if (!token || !activeProfileId) return;
     fetchPreferences();
     fetchWatchlist();
-  }, [token]);
+  }, [token, activeProfileId]);
+
+  // Sync ratings/restrictions when profile changes
+  useEffect(() => {
+    if (!profile) return;
+    
+    if (profile.type === 'adult') {
+      setSelectedRatings(["G", "PG", "PG-13", "R", "NC-17"]);
+    } else {
+      const age = profile.age || 0;
+      if (age < 10) setSelectedRatings(["G"]);
+      else if (age >= 10 && age < 13) setSelectedRatings(["G", "PG"]);
+      else setSelectedRatings(["G", "PG", "PG-13"]);
+    }
+  }, [profile]);
 
   // Reset Discover page when filters change
   useEffect(() => {
@@ -107,7 +134,7 @@ function App() {
 
   // Tab Data Fetching Logic
   useEffect(() => {
-    if (!token || !profile) return;
+    if (!token || !activeProfileId) return;
 
     const controller = new AbortController();
     const signal = controller.signal;
@@ -118,103 +145,140 @@ function App() {
     else if (activeTab === 'date-night' && dateUser2) fetchDateNight(signal);
 
     return () => controller.abort();
-  }, [activeTab, searchQuery, selectedProviders, selectedGenres, selectedRatings, minScore, profile, page, dateUser2, token]);
+  }, [activeTab, searchQuery, selectedProviders, selectedGenres, selectedRatings, minScore, activeProfileId, page, dateUser2, token]);
 
-  const fetchPreferences = () => {
-    fetch(`${API_BASE}/preferences`, { headers: { 'Authorization': `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(setPreferences)
-      .catch(console.error);
+  const authenticatedFetch = async (url, options = {}) => {
+    if (!token) return null;
+    const headers = { 
+      'Authorization': `Bearer ${token}`,
+      'x-profile-id': activeProfileId,
+      ...options.headers 
+    };
+    try {
+      const res = await fetch(url, { ...options, headers });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error(`Backend returned ${res.status}:`, errorData);
+        throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+      }
+      return await res.json();
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error(`Fetch error for ${url}:`, err);
+      }
+      throw err;
+    }
+  };
+
+  const fetchPreferences = async () => {
+    try {
+      const data = await authenticatedFetch(`${API_BASE}/preferences`);
+      if (data) setPreferences(data);
+    } catch (e) {}
   };
 
   const fetchWatchlist = async () => {
     try {
-      const res = await fetch(`${API_BASE}/watchlist`, { headers: { 'Authorization': `Bearer ${token}` } });
-      setWatchlist(await res.json());
-    } catch(e) { console.error(e); }
+      const data = await authenticatedFetch(`${API_BASE}/watchlist`);
+      if (data) setWatchlist(data);
+    } catch (e) {}
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const data = await authenticatedFetch(`${API_BASE}/users`);
+      if (!data) return;
+      setUsers(data);
+      if (data.length > 0 && !dateUser1) setDateUser1(data[0].id);
+      if (data.length > 0 && !activeProfileId) {
+        setActiveProfileId(data[0].id);
+        setProfile(data[0]);
+      }
+    } catch (e) {}
   };
 
   const fetchWatchlistFull = async () => {
+    if (!activeProfileId) return;
     setLoading(true);
-    const headers = { 'Authorization': `Bearer ${token}` };
     try {
-      const res = await fetch(`${API_BASE}/watchlist`, { headers });
-      const data = await res.json();
-      setWatchlist(data);
-      if (data.length > 0) {
-        const promises = data.map(w => fetch(`${API_BASE}/movies/${w.movieId}`, { headers }).then(r => r.json()));
-        setWatchlistMovies(await Promise.all(promises));
-      } else setWatchlistMovies([]);
-    } catch(e) { console.error(e); }
+      const data = await authenticatedFetch(`${API_BASE}/watchlist`);
+      if (data) {
+        setWatchlist(data);
+        if (data.length > 0) {
+          const promises = data.map(w => authenticatedFetch(`${API_BASE}/movies/${w.movieId}`));
+          setWatchlistMovies(await Promise.all(promises));
+        } else setWatchlistMovies([]);
+      }
+    } catch (e) {}
     setLoading(false);
   };
 
-  const fetchMovies = (currentPage, signal) => {
+  const fetchMovies = async (currentPage, signal) => {
     setLoading(true);
-    const params = new URLSearchParams();
-    params.append('page', currentPage);
+    const params = new URLSearchParams({ page: currentPage });
     if (searchQuery) params.append('searchQuery', searchQuery);
     if (selectedProviders.length) params.append('providers', selectedProviders.join('|'));
     if (selectedGenres.length) params.append('genres', selectedGenres.join('|'));
     if (selectedRatings.length) params.append('ratings', selectedRatings.join('|'));
     if (minScore > 0) params.append('minScore', minScore);
 
-    fetch(`${API_BASE}/movies?${params.toString()}`, { signal, headers: { 'Authorization': `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(data => {
+    try {
+      const data = await authenticatedFetch(`${API_BASE}/movies?${params.toString()}`, { signal });
+      if (data) {
         if (currentPage === 1) setMovies(data);
         else setMovies(prev => {
           const newMovies = data.filter(movie => !prev.some(p => p.id === movie.id));
           return [...prev, ...newMovies];
         });
-      })
-      .catch(err => { if (err.name !== 'AbortError') console.error(err); })
-      .finally(() => setLoading(false));
+      }
+    } catch (err) {}
+    finally { setLoading(false); }
   };
 
-  const fetchRecommendations = (signal) => {
-    fetch(`${API_BASE}/recommendations`, { signal, headers: { 'Authorization': `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(setRecommendations)
-      .catch(err => { if (err.name !== 'AbortError') console.error(err); });
+  const fetchRecommendations = async (signal) => {
+    setLoading(true);
+    try {
+      const data = await authenticatedFetch(`${API_BASE}/recommendations`, { signal });
+      if (data) setRecommendations(data);
+    } catch(err) {}
+    finally { setLoading(false); }
   };
 
-  const fetchDateNight = (signal) => {
-    fetch(`${API_BASE}/date-night?user2=${dateUser2}`, { signal, headers: { 'Authorization': `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(setDateNightMatches)
-      .catch(err => { if (err.name !== 'AbortError') console.error(err); });
+  const fetchDateNight = async (signal) => {
+    if (!dateUser1 || !dateUser2) return;
+    setLoading(true);
+    try {
+      const data = await authenticatedFetch(`${API_BASE}/date-night?user1=${dateUser1}&user2=${dateUser2}`, { signal });
+      if (data) setDateNightMatches(data);
+    } catch(err) {}
+    finally { setLoading(false); }
   };
 
   const handlePreferenceChange = async (movieId, preference) => {
     try {
-      await fetch(`${API_BASE}/preferences`, {
+      await authenticatedFetch(`${API_BASE}/preferences`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ movieId, preference })
       });
       fetchPreferences();
-    } catch (err) { console.error(err); }
+    } catch (err) {}
   };
 
   const handleWatchlistChange = async (movieId, addToWatchlist) => {
-    const headers = { 'Authorization': `Bearer ${token}` };
     try {
       if (addToWatchlist) {
-        await fetch(`${API_BASE}/watchlist`, {
+        await authenticatedFetch(`${API_BASE}/watchlist`, {
           method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ movieId })
         });
       } else {
-        await fetch(`${API_BASE}/watchlist/${movieId}`, { method: 'DELETE', headers });
+        await authenticatedFetch(`${API_BASE}/watchlist/${movieId}`, { method: 'DELETE' });
       }
       fetchWatchlist();
       if (activeTab === 'watchlist') fetchWatchlistFull();
-    } catch (err) { console.error(err); }
+    } catch (err) {}
   };
 
   const toggleFilter = (setter, state, value) => {
@@ -238,6 +302,22 @@ function App() {
         </div>
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          {users.length > 0 && (
+            <select 
+              className="search-input" 
+              style={{ margin: 0, padding: '0.4rem 0.8rem', borderRadius: '999px', fontSize: '0.85rem' }}
+              value={activeProfileId}
+              onChange={(e) => {
+                const newId = e.target.value;
+                setActiveProfileId(newId);
+                const found = users.find(u => u.id === newId);
+                if (found) setProfile(found);
+              }}
+            >
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          )}
+
           <div className="glass" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', borderRadius: '999px' }}>
             <User size={18} color="var(--accent)" />
             <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>{user.displayName || user.email}</span>
@@ -253,6 +333,7 @@ function App() {
         <button className={`tab-btn ${activeTab === 'recommendations' ? 'active' : ''}`} onClick={() => setActiveTab('recommendations')}>For You</button>
         <button className={`tab-btn ${activeTab === 'watchlist' ? 'active' : ''}`} onClick={() => setActiveTab('watchlist')}>Watchlist</button>
         <button className={`tab-btn ${activeTab === 'date-night' ? 'active' : ''}`} onClick={() => setActiveTab('date-night')}>Date Night</button>
+        <button className={`tab-btn ${activeTab === 'household' ? 'active' : ''}`} onClick={() => setActiveTab('household')}>Household</button>
       </div>
 
       <div className="layout">
@@ -291,7 +372,17 @@ function App() {
             dateNightMatches={dateNightMatches} preferences={preferences} watchlist={watchlist}
             handlePreferenceChange={handlePreferenceChange} handleWatchlistChange={handleWatchlistChange}
             setSelectedMovieId={setSelectedMovieId} loading={loading}
-            users={[]} dateUser1={user.uid} setDateUser1={()=>{}} dateUser2={dateUser2} setDateUser2={setDateUser2}
+            users={users} dateUser1={dateUser1} setDateUser1={setDateUser1} dateUser2={dateUser2} setDateUser2={setDateUser2}
+          />
+        )}
+
+        {activeTab === 'household' && (
+          <HouseholdConfig 
+            users={users} 
+            fetchUsers={fetchUsers} 
+            API_BASE={API_BASE}
+            activeUser={profile}
+            token={token}
           />
         )}
       </div>

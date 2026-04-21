@@ -1,10 +1,9 @@
 const mongoose = require('mongoose');
 
-const userSchema = new mongoose.Schema({
-  userId: {
+const profileSchema = new mongoose.Schema({
+  ownerId: {
     type: String,
     required: true,
-    unique: true,
     index: true
   },
   name: {
@@ -21,11 +20,7 @@ const userSchema = new mongoose.Schema({
     type: Number,
     min: 0,
     default: null
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('Profile', profileSchema);

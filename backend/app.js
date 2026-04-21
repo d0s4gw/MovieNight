@@ -48,18 +48,18 @@ app.use('/api/genres', (req, res, next) => { req.url = '/genres'; moviesRouter(r
 app.use('/api/providers', (req, res, next) => { req.url = '/providers'; moviesRouter(req, res, next); });
 app.use('/api/certifications', (req, res, next) => { req.url = '/certifications'; moviesRouter(req, res, next); });
 
-app.use('/api/user', usersRouter);
+app.use('/api/users', usersRouter);
 app.use('/api/preferences', preferencesRouter);
 app.use('/api/watchlist', watchlistRouter);
 app.use('/api/date-night', dateNightRouter);
 
 // Recommendations endpoint
 app.get('/api/recommendations', async (req, res, next) => {
-    const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ error: "userId required" });
+    const ownerId = req.user.uid;
+    const profileId = req.headers['x-profile-id'] || ownerId;
 
     try {
-        const likedPrefs = await Preference.find({ userId, preference: 'like' });
+        const likedPrefs = await Preference.find({ ownerId, profileId, preference: 'like' });
         
         if (likedPrefs.length === 0) {
             return res.json([]); 
@@ -68,7 +68,7 @@ app.get('/api/recommendations', async (req, res, next) => {
         const likedIds = likedPrefs.map(p => p.movieId);
         const recommendations = await tmdbService.getRecommendationsForLikedMovies(likedIds);
         
-        const dislikedPrefs = await Preference.find({ userId, preference: 'dislike' });
+        const dislikedPrefs = await Preference.find({ ownerId, profileId, preference: 'dislike' });
         const dislikedIds = new Set(dislikedPrefs.map(p => p.movieId));
 
         const filteredRecs = recommendations.filter(movie => !dislikedIds.has(movie.id));
